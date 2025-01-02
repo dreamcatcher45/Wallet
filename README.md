@@ -19,26 +19,12 @@
 
 ## Screenshots
 
-<div style="display: flex; flex-wrap: wrap; justify-content: space-between;">
-    <div style="flex: 1 1 calc(33.33% - 10px); margin: 5px;">
-        <img src="screenshots/home.png" alt="Home Screen" style="width: 100%;">
-    </div>
-    <div style="flex: 1 1 calc(33.33% - 10px); margin: 5px;">
-        <img src="screenshots/transactions.png" alt="Transactions Screen" style="width: 100%;">
-    </div>
-    <div style="flex: 1 1 calc(33.33% - 10px); margin: 5px;">
-        <img src="screenshots/edit.png" alt="Edit Expense Dialog" style="width: 100%;">
-    </div>
-    <div style="flex: 1 1 calc(33.33% - 10px); margin: 5px;">
-        <img src="screenshots/editWindow.png" alt="Edit Expense Dialog" style="width: 100%;">
-    </div>
-    <div style="flex: 1 1 calc(33.33% - 10px); margin: 5px;">
-        <img src="screenshots/delete.png" alt="Edit Expense Dialog" style="width: 100%;">
-    </div>
-    <div style="flex: 1 1 calc(33.33% - 10px); margin: 5px;">
-        <img src="screenshots/saveAsCSV.png" alt="Edit Expense Dialog" style="width: 100%;">
-    </div>
-</div>
+| Home Screen | Transactions Screen | Edit Expense Dialog |
+|-------------|---------------------|---------------------|
+| ![Home Screen](screenshots/home.png) | ![Transactions Screen](screenshots/transactions.png) | ![Edit Expense Dialog](screenshots/edit.png) |
+| Edit Expense Dialog | Delete Screen | Save as CSV |
+| ![Edit Expense Dialog](screenshots/editWindow.png) | ![Delete Screen](screenshots/delete.png) | ![Save as CSV](screenshots/saveAsCSV.png) |
+
 
 
 
