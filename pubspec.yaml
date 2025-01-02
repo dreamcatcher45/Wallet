@@ -1,0 +1,31 @@
+name: wallet
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+version: 1.0.0+1
+environment:
+  sdk: ^3.5.3
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  intl: ^0.18.1
+  path: ^1.8.3
+  csv: ^5.1.1
+  share_plus: ^7.2.1
+  provider: ^6.1.1
+  dynamic_color: ^1.6.8
+  cupertino_icons: ^1.0.8
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.2
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"  # Path to your icon image
+  adaptive_icon_background: "#fcf9e8"    # Set the background color here
+  adaptive_icon_foreground: "assets/app_icon.png"  # Path to your icon image for foreground
+  flutter_lints: ^4.0.0
+flutter:
+  uses-material-design: true
