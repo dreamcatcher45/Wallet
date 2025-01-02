@@ -31,7 +31,7 @@
 ## How to Download and Install
 
 ### Download APK
-1. Go to the [Releases](https://github.com/yourusername/wallet/releases) section of this repository.
+1. Go to the [Releases](https://github.com/dreamcatcher45/wallet/releases) section of this repository.
 2. Download the latest APK file (`app-release.apk`).
 3. Transfer the APK file to your Android device if downloaded on a computer.
 
