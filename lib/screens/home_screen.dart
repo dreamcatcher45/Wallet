@@ -1,11 +1,14 @@
+// lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/expense_provider.dart';
+import '../providers/settings_provider.dart';
 import 'transactions_screen.dart';
+import 'dashboard_screen.dart';
+import 'tags_screen.dart'; // Updated import
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -14,6 +17,15 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   String _amount = '';
+  String? _selectedTag;
+
+  @override
+  void initState() {
+    super.initState();
+    // Set the default tag (or the first tag) from settings as selected by default
+    final defaultTag = context.read<SettingsProvider>().defaultTag;
+    _selectedTag = defaultTag;
+  }
 
   void _addNumber(String number) {
     setState(() {
@@ -47,11 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final settingsProvider = context.watch<SettingsProvider>();
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
-        centerTitle: false, // Align title to left
+        centerTitle: false,
         title: Text(
           'Wallet',
           style: TextStyle(
@@ -60,10 +73,25 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
+          // Dashboard button
           IconButton(
             icon: Icon(
-              Icons
-                  .receipt_long_rounded, // More appropriate icon for transactions
+              Icons.dashboard,
+              color: colorScheme.onSurface,
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DashboardScreen(),
+                ),
+              );
+            },
+          ),
+          // Transactions button
+          IconButton(
+            icon: Icon(
+              Icons.receipt_long_rounded,
               color: colorScheme.onSurface,
             ),
             onPressed: () {
@@ -71,6 +99,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => const TransactionsScreen(),
+                ),
+              );
+            },
+          ),
+          // Tags button (renamed from Settings)
+          IconButton(
+            icon: Icon(
+              Icons.tag,
+              color: colorScheme.onSurface,
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TagsScreen(),
                 ),
               );
             },
@@ -123,15 +166,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           TextField(
                             controller: _nameController,
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               labelText: 'Expense Name',
-                              prefixIcon: Icon(
-                                Icons.label_outline,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                              prefixIcon: Icon(Icons.label_outline),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -140,10 +181,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             readOnly: true,
                             decoration: InputDecoration(
                               labelText: 'Amount',
-                              prefixIcon: Icon(
-                                Icons.currency_rupee,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                              prefixIcon: Icon(Icons.currency_rupee,
+                                  color: colorScheme.onSurfaceVariant),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   Icons.backspace,
@@ -151,6 +190,34 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 onPressed: _deleteLastDigit,
                               ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Select Tag:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          // Horizontally scrolling list of ChoiceChips for tag selection
+                          SizedBox(
+                            height: 40,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: settingsProvider.tags.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (context, index) {
+                                final tag = settingsProvider.tags[index];
+                                return ChoiceChip(
+                                  label: Text(tag),
+                                  selected: _selectedTag == tag,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      _selectedTag = tag;
+                                    });
+                                  },
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -186,6 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             context.read<ExpenseProvider>().addExpense(
                                   _nameController.text,
                                   double.parse(_amount),
+                                  _selectedTag ?? settingsProvider.defaultTag,
                                 );
                             _clear();
                             _nameController.clear();
@@ -217,7 +285,6 @@ class _HomeScreenState extends State<HomeScreen> {
 class NumberButton extends StatelessWidget {
   final String number;
   final VoidCallback onPressed;
-
   const NumberButton({
     super.key,
     required this.number,
@@ -227,7 +294,6 @@ class NumberButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
     return FilledButton.tonal(
       onPressed: onPressed,
       style: FilledButton.styleFrom(

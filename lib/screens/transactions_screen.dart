@@ -1,15 +1,16 @@
+// lib/screens/transactions_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:wallet/models/expense.dart';
 import 'dart:io';
+import '../models/expense.dart';
 import '../providers/expense_provider.dart';
+import '../providers/settings_provider.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
-
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
 }
@@ -18,17 +19,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // Filtering state variables
+  String _selectedFilter = "All"; // Options: "All", "Current Month", "Date Range", "Tag Based"
+  DateTimeRange? _selectedRange;
+  String? _selectedTag;
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () => context.read<ExpenseProvider>().loadExpenses(),
-    );
+    Future.microtask(() => context.read<ExpenseProvider>().loadExpenses());
   }
 
+  // Group transactions by month (for display)
   Map<String, List<Expense>> _groupExpensesByMonth(List<Expense> expenses) {
     final groupedExpenses = <String, List<Expense>>{};
-
     for (var expense in expenses) {
       final monthKey = DateFormat('MMMM yyyy').format(expense.date);
       if (!groupedExpenses.containsKey(monthKey)) {
@@ -36,24 +40,35 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       }
       groupedExpenses[monthKey]!.add(expense);
     }
-
-    // Sort expenses within each month by date (newest first)
     groupedExpenses.forEach((key, list) {
       list.sort((a, b) => b.date.compareTo(a.date));
     });
-
     return Map.fromEntries(groupedExpenses.entries.toList()
-      ..sort((a, b) => DateFormat('MMMM yyyy')
-          .parse(b.key)
-          .compareTo(DateFormat('MMMM yyyy').parse(a.key))));
+      ..sort((a, b) =>
+          DateFormat('MMMM yyyy').parse(b.key).compareTo(DateFormat('MMMM yyyy').parse(a.key))));
   }
 
-  double _calculateMonthTotal(List<Expense> expenses) {
-    return expenses.fold(0, (sum, expense) => sum + expense.amount);
+  // Apply filtering based on current selection
+  List<Expense> _filterExpenses(List<Expense> expenses) {
+    if (_selectedFilter == "Current Month") {
+      return expenses.where((expense) =>
+          expense.date.year == DateTime.now().year &&
+          expense.date.month == DateTime.now().month).toList();
+    } else if (_selectedFilter == "Date Range" && _selectedRange != null) {
+      return expenses.where((expense) =>
+          expense.date.isAfter(_selectedRange!.start.subtract(const Duration(days: 1))) &&
+          expense.date.isBefore(_selectedRange!.end.add(const Duration(days: 1)))).toList();
+    } else if (_selectedFilter == "Tag Based" && _selectedTag != null) {
+      return expenses.where((expense) => expense.tag == _selectedTag).toList();
+    }
+    return expenses; // "All" or if no additional filtering criteria set
   }
 
+  // CSV export function remains unchanged
   Future<void> _exportCsv() async {
     try {
+      // Use the filtered list for CSV export if desired,
+      // else, you may opt to export all expenses.
       final csvData = await context.read<ExpenseProvider>().exportToCsv();
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/expenses.csv');
@@ -69,6 +84,111 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
+  // Show modal bottom sheet for filtering options
+  Future<void> _showFilterModal() async {
+    // Use temporary local variables for modal state.
+    String tempFilter = _selectedFilter;
+    DateTimeRange? tempRange = _selectedRange;
+    String? tempTag = _selectedTag;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        // Use a StatefulBuilder so that modal state can be updated
+        return Padding(
+          padding: MediaQuery.of(context).viewInsets,
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setModalState) {
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text("Filter Transactions", style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: tempFilter,
+                      decoration: const InputDecoration(
+                        labelText: "Filter Type",
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: "All", child: Text("All Time")),
+                        DropdownMenuItem(value: "Current Month", child: Text("Current Month")),
+                        DropdownMenuItem(value: "Date Range", child: Text("Date Range")),
+                        DropdownMenuItem(value: "Tag Based", child: Text("Tag Based")),
+                      ],
+                      onChanged: (value) {
+                        setModalState(() {
+                          tempFilter = value!;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    if (tempFilter == "Date Range")
+                      TextButton(
+                        onPressed: () async {
+                          final range = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime.now(),
+                          );
+                          if (range != null) {
+                            setModalState(() {
+                              tempRange = range;
+                            });
+                          }
+                        },
+                        child: Text(
+                          tempRange == null
+                              ? "Select Date Range"
+                              : "${DateFormat('yyyy-MM-dd').format(tempRange!.start)} - ${DateFormat('yyyy-MM-dd').format(tempRange!.end)}",
+                        ),
+                      ),
+                    if (tempFilter == "Tag Based")
+                      Consumer<SettingsProvider>(
+                        builder: (context, settingsProvider, child) {
+                          return DropdownButtonFormField<String>(
+                            value: tempTag ?? settingsProvider.defaultTag,
+                            decoration: const InputDecoration(
+                              labelText: "Select Tag",
+                              border: OutlineInputBorder(),
+                            ),
+                            items: settingsProvider.tags
+                                .map((tag) => DropdownMenuItem(value: tag, child: Text(tag)))
+                                .toList(),
+                            onChanged: (value) {
+                              setModalState(() {
+                                tempTag = value;
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        // Update the state with the new filters and close the modal.
+                        setState(() {
+                          _selectedFilter = tempFilter;
+                          _selectedRange = tempRange;
+                          _selectedTag = tempTag;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: const Text("Apply"),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _showEditExpenseDialog(Expense expense) async {
     final nameController = TextEditingController(text: expense.name);
     final amountController =
@@ -76,7 +196,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final dateController = TextEditingController(
       text: DateFormat('yyyy-MM-dd').format(expense.date),
     );
+    String selectedTag = expense.tag;
     DateTime selectedDate = expense.date;
+    final settingsProvider = context.read<SettingsProvider>();
 
     await showModalBottomSheet(
       context: context,
@@ -89,87 +211,115 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             right: 16,
             top: 16,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Edit Expense',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountController,
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: () async {
-                  final DateTime? picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    selectedDate = picked;
-                    dateController.text =
-                        DateFormat('yyyy-MM-dd').format(picked);
-                  }
-                },
-                child: AbsorbPointer(
-                  child: TextField(
-                    controller: dateController,
+          child: StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Edit Expense',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
                     decoration: const InputDecoration(
-                      labelText: 'Date',
+                      labelText: 'Name',
                       border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: amountController,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
                   ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      final updatedExpense = Expense(
-                        id: expense.id,
-                        name: nameController.text,
-                        amount: double.tryParse(amountController.text) ??
-                            expense.amount,
-                        date: selectedDate,
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now(),
                       );
-                      context
-                          .read<ExpenseProvider>()
-                          .updateExpense(updatedExpense);
-                      Navigator.pop(context);
+                      if (picked != null) {
+                        setState(() {
+                          selectedDate = picked;
+                          dateController.text =
+                              DateFormat('yyyy-MM-dd').format(picked);
+                        });
+                      }
                     },
-                    child: const Text('Save'),
+                    child: AbsorbPointer(
+                      child: TextField(
+                        controller: dateController,
+                        decoration: const InputDecoration(
+                          labelText: 'Date',
+                          border: OutlineInputBorder(),
+                          suffixIcon: Icon(Icons.calendar_today),
+                        ),
+                      ),
+                    ),
                   ),
+                  const SizedBox(height: 16),
+                  // Matching dropdown for tag selection
+                  DropdownButtonFormField<String>(
+                    value: selectedTag,
+                    decoration: const InputDecoration(
+                      labelText: 'Tag',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: settingsProvider.tags
+                        .map((tag) => DropdownMenuItem(
+                              value: tag,
+                              child: Text(tag),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedTag = value!;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          final updatedExpense = Expense(
+                            id: expense.id,
+                            name: nameController.text,
+                            amount: double.tryParse(amountController.text) ??
+                                expense.amount,
+                            date: selectedDate,
+                            tag: selectedTag,
+                          );
+                          context
+                              .read<ExpenseProvider>()
+                              .updateExpense(updatedExpense);
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
-              const SizedBox(height: 16),
-            ],
-          ),
+            );
+          }),
         );
       },
     );
@@ -265,12 +415,24 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               color: colorScheme.onSurface.withOpacity(0.7),
             ),
           ),
-          trailing: Text(
-            '₹${expense.amount.toStringAsFixed(2)}',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
-                ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '₹${expense.amount.toStringAsFixed(2)}',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    ),
+              ),
+              Text(
+                expense.tag,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ),
         ),
       ),
@@ -280,11 +442,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Transactions'),
         actions: [
+          // Filter button to trigger modal with filter options.
+          IconButton(
+            icon: const Icon(Icons.filter_alt),
+            onPressed: _showFilterModal,
+          ),
           IconButton(
             icon: const Icon(Icons.file_download),
             onPressed: _exportCsv,
@@ -334,9 +500,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     padding: const EdgeInsets.only(top: 8, left: 4),
                     child: Text(
                       'Swipe left to edit, right to delete',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurface.withOpacity(0.6),
-                          ),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: colorScheme.onSurface.withOpacity(0.6)),
                     ),
                   ),
               ],
@@ -345,12 +512,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           Expanded(
             child: Consumer<ExpenseProvider>(
               builder: (context, provider, child) {
-                final filteredExpenses = provider.expenses.where((expense) {
-                  return expense.name
-                      .toLowerCase()
-                      .contains(_searchQuery.toLowerCase());
+                final filteredExpenses = _filterExpenses(provider.expenses).where((expense) {
+                  return expense.name.toLowerCase().contains(_searchQuery.toLowerCase());
                 }).toList();
-
                 if (filteredExpenses.isEmpty) {
                   return Center(
                     child: Column(
@@ -367,52 +531,40 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           style: Theme.of(context)
                               .textTheme
                               .titleLarge
-                              ?.copyWith(
-                                color: colorScheme.onSurface.withOpacity(0.7),
-                              ),
+                              ?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
                         ),
                       ],
                     ),
                   );
                 }
-
                 final groupedExpenses = _groupExpensesByMonth(filteredExpenses);
-
                 return ListView.builder(
                   itemCount: groupedExpenses.length,
                   padding: const EdgeInsets.only(top: 8),
                   itemBuilder: (context, monthIndex) {
                     final monthKey = groupedExpenses.keys.elementAt(monthIndex);
                     final monthExpenses = groupedExpenses[monthKey]!;
-                    final monthTotal = _calculateMonthTotal(monthExpenses);
-
+                    double monthTotal = 0;
+                    for (var expense in monthExpenses) {
+                      monthTotal += expense.amount;
+                    }
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
                                 monthKey,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.copyWith(
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: colorScheme.onSurface
-                                          .withOpacity(0.8),
+                                      color: colorScheme.onSurface.withOpacity(0.8),
                                     ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: colorScheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(20),
@@ -441,11 +593,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             );
                           },
                         ),
-                        // Add some bottom padding to the last month's transactions
-                        SizedBox(
-                            height: monthIndex == groupedExpenses.length - 1
-                                ? 16
-                                : 8),
+                        SizedBox(height: monthIndex == groupedExpenses.length - 1 ? 16 : 8),
                       ],
                     );
                   },

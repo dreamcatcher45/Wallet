@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'providers/expense_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -11,12 +12,10 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   static final _defaultLightColorScheme = ColorScheme.fromSeed(
     seedColor: Colors.deepPurple,
     brightness: Brightness.light,
   );
-
   static final _defaultDarkColorScheme = ColorScheme.fromSeed(
     seedColor: Colors.deepPurple,
     brightness: Brightness.dark,
@@ -24,8 +23,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ExpenseProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ExpenseProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+      ],
       child: DynamicColorBuilder(
         builder: (lightColorScheme, darkColorScheme) {
           return MaterialApp(

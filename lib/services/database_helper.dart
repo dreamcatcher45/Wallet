@@ -6,7 +6,6 @@ import '../models/expense.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
-
   DatabaseHelper._init();
 
   Future<Database> get database async {
@@ -18,7 +17,6 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-
     return await openDatabase(
       path,
       version: 1,
@@ -40,13 +38,13 @@ class DatabaseHelper {
     const idType = 'INTEGER PRIMARY KEY AUTOINCREMENT';
     const textType = 'TEXT NOT NULL';
     const realType = 'REAL NOT NULL';
-
     await db.execute('''
       CREATE TABLE expenses (
         id $idType,
         name $textType,
         amount $realType,
-        date $textType
+        date $textType,
+        tag $textType
       )
     ''');
   }
@@ -57,6 +55,7 @@ class DatabaseHelper {
       'name': expense.name,
       'amount': expense.amount,
       'date': expense.date.toIso8601String(),
+      'tag': expense.tag,
     });
   }
 
@@ -69,7 +68,6 @@ class DatabaseHelper {
     final db = await instance.database;
     final startOfMonth = DateTime(date.year, date.month, 1);
     final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
-
     return await db.query(
       'expenses',
       where: 'date BETWEEN ? AND ?',
@@ -88,6 +86,21 @@ class DatabaseHelper {
 
   Future<List<Expense>> getMonthExpenses(DateTime date) async {
     final result = await queryMonthExpenses(date);
+    return result.map((json) => Expense.fromMap(json)).toList();
+  }
+
+  Future<List<Expense>> getExpensesByDateRange(
+      DateTime start, DateTime end) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'expenses',
+      where: 'date BETWEEN ? AND ?',
+      whereArgs: [
+        start.toIso8601String(),
+        end.toIso8601String(),
+      ],
+      orderBy: 'date DESC',
+    );
     return result.map((json) => Expense.fromMap(json)).toList();
   }
 

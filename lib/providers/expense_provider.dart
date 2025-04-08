@@ -17,16 +17,16 @@ class ExpenseProvider with ChangeNotifier {
     loadExpenses();
   }
 
-  Future<void> addExpense(String name, double amount) async {
+  Future<void> addExpense(String name, double amount, String tag) async {
     try {
       final expense = Expense(
         name: name,
         amount: amount,
         date: DateTime.now(),
+        tag: tag,
       );
-
       await _dbHelper.insertExpense(expense);
-      await loadExpenses(); // Reload all expenses after adding
+      await loadExpenses();
       notifyListeners();
     } catch (e) {
       print('Error adding expense: $e');
@@ -50,10 +50,8 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> calculateMonthlyTotal() async {
     try {
       final monthExpenses = await _dbHelper.getMonthExpenses(DateTime.now());
-      _monthlyTotal = monthExpenses.fold(
-        0,
-        (previousValue, expense) => previousValue + expense.amount,
-      );
+      _monthlyTotal =
+          monthExpenses.fold(0, (prev, expense) => prev + expense.amount);
       notifyListeners();
     } catch (e) {
       print('Error calculating monthly total: $e');
@@ -62,17 +60,28 @@ class ExpenseProvider with ChangeNotifier {
     }
   }
 
-  Future<String> exportToCsv() async {
+  /// Export CSV with optional filtering:
+  /// filter: 'all' | 'currentMonth' | 'specific'
+  /// if filter == 'specific', start and end must be provided.
+  Future<String> exportToCsv({String filter = 'all', DateTime? start, DateTime? end}) async {
     try {
-      final expenses = await _dbHelper.getExpenses();
+      List<Expense> expenses;
+      if (filter == 'currentMonth') {
+        expenses = await _dbHelper.getMonthExpenses(DateTime.now());
+      } else if (filter == 'specific' && start != null && end != null) {
+        expenses = await _dbHelper.getExpensesByDateRange(start, end);
+      } else {
+        expenses = await _dbHelper.getExpenses();
+      }
       final csvData = [
-        ['Index', 'Date', 'Name', 'Amount'], // Headers
+        ['Index', 'Date', 'Name', 'Amount', 'Tag'],
         ...expenses.asMap().entries.map((entry) => [
-              entry.key + 1, // Index starting from 1
+              entry.key + 1,
               entry.value.date.toString(),
               entry.value.name,
               entry.value.amount.toStringAsFixed(2),
-            ]),
+              entry.value.tag,
+            ])
       ];
       return const ListToCsvConverter().convert(csvData);
     } catch (e) {
@@ -83,9 +92,8 @@ class ExpenseProvider with ChangeNotifier {
 
   Future<void> deleteExpense(int id) async {
     try {
-      // Store the expense before deleting for undo functionality
-      _lastDeletedExpense = _expenses.firstWhere((expense) => expense.id == id);
-
+      _lastDeletedExpense =
+          _expenses.firstWhere((expense) => expense.id == id);
       await _dbHelper.deleteExpense(id);
       await loadExpenses();
       notifyListeners();
@@ -112,7 +120,7 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> updateExpense(Expense expense) async {
     try {
       await _dbHelper.updateExpense(expense);
-      await loadExpenses(); // Reload all expenses after updating
+      await loadExpenses();
       notifyListeners();
     } catch (e) {
       print('Error updating expense: $e');
