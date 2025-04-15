@@ -179,25 +179,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const SizedBox(width: 16),
                           if (_selectedFilter == 'By Tag')
                             Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedTag ?? settingsProvider.defaultTag,
-                                decoration: const InputDecoration(
-                                  labelText: 'Tag',
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: settingsProvider.tags
-                                    .map((tag) => DropdownMenuItem(
-                                          value: tag,
-                                          child: Text(tag),
-                                        ))
-                                    .toList(),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedTag = value;
-                                  });
-                                },
-                              ),
-                            )
+    child: DropdownButtonFormField<String>(
+      value: _selectedTag ?? context.read<SettingsProvider>().defaultTag,
+      decoration: const InputDecoration(
+        labelText: 'Tag',
+        border: OutlineInputBorder(),
+      ),
+      items: context
+          .read<SettingsProvider>()
+          .tags
+          .map((tag) => DropdownMenuItem(
+                value: tag.name,
+                child: Text(tag.name),
+              ))
+          .toList(),
+      onChanged: (value) {
+        setState(() {
+          _selectedTag = value;
+        });
+      },
+    ),
+  )
                           else if (_selectedFilter == 'Month' ||
                               _selectedFilter == 'Week' ||
                               _selectedFilter == 'Year')

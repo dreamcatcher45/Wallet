@@ -1,16 +1,17 @@
-// lib/screens/transactions_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../providers/settings_provider.dart';
 
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({super.key});
+  const TransactionsScreen({Key? key}) : super(key: key);
+
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
 }
@@ -27,10 +28,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   @override
   void initState() {
     super.initState();
+    // Ensure expenses are loaded
     Future.microtask(() => context.read<ExpenseProvider>().loadExpenses());
   }
 
-  // Group transactions by month (for display)
+  // Group transactions by month for display
   Map<String, List<Expense>> _groupExpensesByMonth(List<Expense> expenses) {
     final groupedExpenses = <String, List<Expense>>{};
     for (var expense in expenses) {
@@ -43,12 +45,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     groupedExpenses.forEach((key, list) {
       list.sort((a, b) => b.date.compareTo(a.date));
     });
-    return Map.fromEntries(groupedExpenses.entries.toList()
+    final sortedEntries = groupedExpenses.entries.toList()
       ..sort((a, b) =>
-          DateFormat('MMMM yyyy').parse(b.key).compareTo(DateFormat('MMMM yyyy').parse(a.key))));
+          DateFormat('MMMM yyyy').parse(b.key).compareTo(DateFormat('MMMM yyyy').parse(a.key)));
+    return Map.fromEntries(sortedEntries);
   }
 
-  // Apply filtering based on current selection
+  // Apply filtering based on the current selection
   List<Expense> _filterExpenses(List<Expense> expenses) {
     if (_selectedFilter == "Current Month") {
       return expenses.where((expense) =>
@@ -59,7 +62,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           expense.date.isAfter(_selectedRange!.start.subtract(const Duration(days: 1))) &&
           expense.date.isBefore(_selectedRange!.end.add(const Duration(days: 1)))).toList();
     } else if (_selectedFilter == "Tag Based" && _selectedTag != null) {
-      return expenses.where((expense) => expense.tag == _selectedTag).toList();
+      return expenses.where((expense) =>
+          expense.tag.toLowerCase() == _selectedTag!.toLowerCase()).toList();
     }
     return expenses; // "All" or if no additional filtering criteria set
   }
@@ -90,11 +94,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     String tempFilter = _selectedFilter;
     DateTimeRange? tempRange = _selectedRange;
     String? tempTag = _selectedTag;
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (BuildContext context) {
-        // Use a StatefulBuilder so that modal state can be updated
+        // Use a StatefulBuilder so that modal state can be updated.
         return Padding(
           padding: MediaQuery.of(context).viewInsets,
           child: StatefulBuilder(
@@ -139,11 +144,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             });
                           }
                         },
-                        child: Text(
-                          tempRange == null
-                              ? "Select Date Range"
-                              : "${DateFormat('yyyy-MM-dd').format(tempRange!.start)} - ${DateFormat('yyyy-MM-dd').format(tempRange!.end)}",
-                        ),
+                        child: Text(tempRange == null
+                            ? "Select Date Range"
+                            : "${DateFormat('yyyy-MM-dd').format(tempRange!.start)} - ${DateFormat('yyyy-MM-dd').format(tempRange!.end)}"),
                       ),
                     if (tempFilter == "Tag Based")
                       Consumer<SettingsProvider>(
@@ -155,7 +158,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                               border: OutlineInputBorder(),
                             ),
                             items: settingsProvider.tags
-                                .map((tag) => DropdownMenuItem(value: tag, child: Text(tag)))
+                                .map((tag) => DropdownMenuItem<String>(
+                                      value: tag.name,
+                                      child: Text(tag.name),
+                                    ))
                                 .toList(),
                             onChanged: (value) {
                               setModalState(() {
@@ -191,11 +197,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   Future<void> _showEditExpenseDialog(Expense expense) async {
     final nameController = TextEditingController(text: expense.name);
-    final amountController =
-        TextEditingController(text: expense.amount.toString());
-    final dateController = TextEditingController(
-      text: DateFormat('yyyy-MM-dd').format(expense.date),
-    );
+    final amountController = TextEditingController(text: expense.amount.toString());
+    final dateController = TextEditingController(text: DateFormat('yyyy-MM-dd').format(expense.date));
     String selectedTag = expense.tag;
     DateTime selectedDate = expense.date;
     final settingsProvider = context.read<SettingsProvider>();
@@ -206,127 +209,116 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       builder: (BuildContext context) {
         return Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 16,
-          ),
+              bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 16),
           child: StatefulBuilder(
-              builder: (BuildContext context, StateSetter setState) {
-            return SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Edit Expense',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Name',
-                      border: OutlineInputBorder(),
+            builder: (BuildContext context, StateSetter setStateModal) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Edit Expense', style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Name',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: amountController,
-                    decoration: const InputDecoration(
-                      labelText: 'Amount',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: amountController,
+                      decoration: const InputDecoration(
+                        labelText: 'Amount',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
                     ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () async {
-                      final DateTime? picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          selectedDate = picked;
-                          dateController.text =
-                              DateFormat('yyyy-MM-dd').format(picked);
-                        });
-                      }
-                    },
-                    child: AbsorbPointer(
-                      child: TextField(
-                        controller: dateController,
-                        decoration: const InputDecoration(
-                          labelText: 'Date',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.calendar_today),
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () async {
+                        final DateTime? picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setStateModal(() {
+                            selectedDate = picked;
+                            dateController.text = DateFormat('yyyy-MM-dd').format(picked);
+                          });
+                        }
+                      },
+                      child: AbsorbPointer(
+                        child: TextField(
+                          controller: dateController,
+                          decoration: const InputDecoration(
+                            labelText: 'Date',
+                            border: OutlineInputBorder(),
+                            suffixIcon: Icon(Icons.calendar_today),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Matching dropdown for tag selection
-                  DropdownButtonFormField<String>(
-                    value: selectedTag,
-                    decoration: const InputDecoration(
-                      labelText: 'Tag',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    // Tag dropdown in edit expense dialog:
+                    DropdownButtonFormField<String>(
+                      value: selectedTag,
+                      decoration: const InputDecoration(
+                        labelText: 'Tag',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: settingsProvider.tags
+                          .map((tag) => DropdownMenuItem<String>(
+                                value: tag.name,
+                                child: Text(tag.name),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        setStateModal(() {
+                          selectedTag = value!;
+                        });
+                      },
                     ),
-                    items: settingsProvider.tags
-                        .map((tag) => DropdownMenuItem(
-                              value: tag,
-                              child: Text(tag),
-                            ))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedTag = value!;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          final updatedExpense = Expense(
-                            id: expense.id,
-                            name: nameController.text,
-                            amount: double.tryParse(amountController.text) ??
-                                expense.amount,
-                            date: selectedDate,
-                            tag: selectedTag,
-                          );
-                          context
-                              .read<ExpenseProvider>()
-                              .updateExpense(updatedExpense);
-                          Navigator.pop(context);
-                        },
-                        child: const Text('Save'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            );
-          }),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            final updatedExpense = Expense(
+                              id: expense.id,
+                              name: nameController.text,
+                              amount: double.tryParse(amountController.text) ?? expense.amount,
+                              date: selectedDate,
+                              tag: selectedTag,
+                            );
+                            context.read<ExpenseProvider>().updateExpense(updatedExpense);
+                            Navigator.pop(context);
+                          },
+                          child: const Text('Save'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              );
+            },
+          ),
         );
       },
     );
   }
 
-  Widget _buildExpenseItem(
-      Expense expense, ColorScheme colorScheme, ExpenseProvider provider) {
+  Widget _buildExpenseItem(Expense expense, ColorScheme colorScheme, ExpenseProvider provider) {
     return Dismissible(
       key: Key(expense.id.toString()),
       direction: DismissDirection.horizontal,
@@ -337,10 +329,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           color: colorScheme.error,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(
-          Icons.delete,
-          color: colorScheme.onError,
-        ),
+        child: Icon(Icons.delete, color: colorScheme.onError),
       ),
       secondaryBackground: Container(
         alignment: Alignment.centerRight,
@@ -349,10 +338,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           color: colorScheme.primary,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(
-          Icons.edit,
-          color: colorScheme.onPrimary,
-        ),
+        child: Icon(Icons.edit, color: colorScheme.onPrimary),
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.endToStart) {
@@ -391,8 +377,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
         ),
         child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: CircleAvatar(
             backgroundColor: colorScheme.primaryContainer,
             child: Text(
@@ -405,15 +390,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
           title: Text(
             expense.name,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           subtitle: Text(
             DateFormat('E, MMM d').format(expense.date),
-            style: TextStyle(
-              color: colorScheme.onSurface.withOpacity(0.7),
-            ),
+            style: TextStyle(color: colorScheme.onSurface.withOpacity(0.7)),
           ),
           trailing: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -423,15 +404,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
-                    ?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.primary,
-                    ),
+                    ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary),
               ),
-              Text(
-                expense.tag,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text(expense.tag),
             ],
           ),
         ),
@@ -446,7 +421,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       appBar: AppBar(
         title: const Text('Transactions'),
         actions: [
-          // Filter button to trigger modal with filter options.
           IconButton(
             icon: const Icon(Icons.filter_alt),
             onPressed: _showFilterModal,
@@ -463,9 +437,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
               color: colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(16),
-              ),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
               boxShadow: [
                 BoxShadow(
                   color: colorScheme.shadow.withOpacity(0.05),
@@ -558,10 +530,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             children: [
                               Text(
                                 monthKey,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: colorScheme.onSurface.withOpacity(0.8),
-                                    ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.onSurface.withOpacity(0.8)),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -586,11 +558,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           itemCount: monthExpenses.length,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemBuilder: (context, index) {
-                            return _buildExpenseItem(
-                              monthExpenses[index],
-                              colorScheme,
-                              provider,
-                            );
+                            return _buildExpenseItem(monthExpenses[index], colorScheme, provider);
                           },
                         ),
                         SizedBox(height: monthIndex == groupedExpenses.length - 1 ? 16 : 8),

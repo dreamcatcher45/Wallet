@@ -1,7 +1,7 @@
-// lib/services/database_helper.dart
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/expense.dart';
+import '../providers/settings_provider.dart'; // For Tag model
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -38,6 +38,8 @@ class DatabaseHelper {
     const idType = 'INTEGER PRIMARY KEY AUTOINCREMENT';
     const textType = 'TEXT NOT NULL';
     const realType = 'REAL NOT NULL';
+
+    // Create expenses table.
     await db.execute('''
       CREATE TABLE expenses (
         id $idType,
@@ -47,6 +49,24 @@ class DatabaseHelper {
         tag $textType
       )
     ''');
+
+    // Create tags table.
+    await db.execute('''
+      CREATE TABLE tags (
+        name TEXT PRIMARY KEY,
+        allowanceLimit REAL,
+        duration INTEGER,
+        allowanceStart TEXT
+      )
+    ''');
+
+    // Insert a default "General" tag.
+    await db.insert('tags', {
+      'name': 'General',
+      'allowanceLimit': null,
+      'duration': 30,
+      'allowanceStart': null,
+    });
   }
 
   Future<int> insertExpense(Expense expense) async {
@@ -67,6 +87,7 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> queryMonthExpenses(DateTime date) async {
     final db = await instance.database;
     final startOfMonth = DateTime(date.year, date.month, 1);
+    // last day of month:
     final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
     return await db.query(
       'expenses',
@@ -110,6 +131,45 @@ class DatabaseHelper {
       'expenses',
       where: 'id = ?',
       whereArgs: [id],
+    );
+  }
+
+  // ---------- Tag table functions ----------
+  Future<List<Map<String, dynamic>>> queryAllTags() async {
+    final db = await instance.database;
+    return await db.query('tags', orderBy: 'name ASC');
+  }
+
+  Future<List<Tag>> getTags() async {
+    final result = await queryAllTags();
+    return result.map((json) => Tag.fromMap(json)).toList();
+  }
+
+  Future<int> insertTag(Tag tag) async {
+    final db = await instance.database;
+    return await db.insert(
+      'tags',
+      tag.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<int> updateTag(Tag tag) async {
+    final db = await instance.database;
+    return await db.update(
+      'tags',
+      tag.toMap(),
+      where: 'name = ?',
+      whereArgs: [tag.name],
+    );
+  }
+
+  Future<int> deleteTag(String tagName) async {
+    final db = await instance.database;
+    return await db.delete(
+      'tags',
+      where: 'name = ?',
+      whereArgs: [tagName],
     );
   }
 
